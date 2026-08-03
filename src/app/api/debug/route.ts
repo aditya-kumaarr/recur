@@ -1,8 +1,6 @@
 import { Sandbox } from "@vercel/sandbox";
 import { createClient } from "@/lib/supabase/server";
 
-const NVIDIA_MODEL = "meta/llama-3.3-70b-instruct";
-
 const MAX_LEN = 4000;
 const RATE_LIMIT = 5;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
@@ -41,18 +39,20 @@ async function callModel(
   messages: { role: string; content: string }[],
   maxTokens: number
 ) {
-  const apiKey = process.env.NVIDIA_API_KEY;
-  if (!apiKey) {
-    throw new Error("NVIDIA_API_KEY is not set on the server");
+  const apiKey = process.env.LLM_API_KEY;
+  const apiUrl = process.env.LLM_API_URL;
+  const model = process.env.LLM_MODEL;
+  if (!apiKey || !apiUrl || !model) {
+    throw new Error("LLM provider is not configured on the server");
   }
-  const res = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+  const res = await fetch(apiUrl, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: NVIDIA_MODEL,
+      model,
       messages,
       temperature: 0.2,
       max_tokens: maxTokens,
@@ -60,7 +60,7 @@ async function callModel(
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`NVIDIA API error ${res.status}: ${text}`);
+    throw new Error(`LLM provider error ${res.status}: ${text}`);
   }
   const data = await res.json();
   return data.choices[0].message.content as string;
