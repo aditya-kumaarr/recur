@@ -9,7 +9,7 @@ Built for the ChatGPT Codex India Hackathon 2026 — **Agentic Coding** track.
 
 ## Live demo
 
-[Add your deployed Vercel URL here]
+[recur-swart.vercel.app](https://recur-swart.vercel.app)
 
 ## The problem
 
