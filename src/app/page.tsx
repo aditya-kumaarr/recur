@@ -39,31 +39,6 @@ export default function Home() {
               writes a patch, runs the tests, and reviews its own fix — live,
               out loud, no black box.
             </p>
-            <div className="mt-8 flex items-center gap-3">
-              <TryItLink className="flex items-center gap-4 rounded-full bg-surface py-2 pl-6 pr-2 text-left shadow-sm ring-1 ring-border transition-shadow hover:shadow-md">
-                <span className="text-sm leading-tight">
-                  <span className="block font-medium">Watch it</span>
-                  <span className="block text-muted">fix a real bug</span>
-                </span>
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent">
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M3 8h10M9 4l4 4-4 4"
-                      stroke="#17171A"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-              </TryItLink>
-            </div>
           </div>
 
           <TryItTarget>
