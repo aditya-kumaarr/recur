@@ -38,25 +38,22 @@ Sign in with Google or GitHub to have your runs saved to your account.
 ## Tech stack
 
 - **Next.js 16** (App Router) + **Tailwind CSS v4**
-- **Meta Llama 3.3 70B Instruct**, served free via **NVIDIA NIM** (OpenAI-compatible
-  API — `https://integrate.api.nvidia.com/v1`)
-- Test execution via Node's built-in test runner (`node --test`), run directly
-  in the API route
+- **Supabase** for auth (Google / GitHub) and storing run history
+- **Vercel Sandbox** for isolated, network-denied execution of submitted code
+- Test execution via Node's built-in test runner (`node --test`)
 - Built with **OpenAI Codex** as the primary coding agent
 
 ## Running locally
 
 ```bash
 npm install
-cp .env.local.example .env.local   # add your own NVIDIA_API_KEY
+cp .env.local.example .env.local   # add your own API keys
 npm run dev
 ```
 
-Get a free API key at [build.nvidia.com](https://build.nvidia.com/meta/llama-3_3-70b-instruct).
-
 ## A note on latency
 
-The free NVIDIA NIM endpoint's throughput varies under load — a full run
-(diagnose + patch + self-review, two model calls) typically takes anywhere from
-15 seconds to a couple of minutes. This is a free-tier characteristic of the
-inference provider, not the agent loop itself.
+The free tier of the underlying inference provider has variable throughput
+under load — a full run (diagnose + patch + self-review, two model calls)
+typically takes anywhere from 15 seconds to a couple of minutes. This is a
+free-tier characteristic of the provider, not the agent loop itself.
