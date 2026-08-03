@@ -1,4 +1,6 @@
 import AgentDemo from "./AgentDemo";
+import TryItLink from "./TryItLink";
+import TryItTarget from "./TryItTarget";
 
 export default function Home() {
   return (
@@ -17,16 +19,11 @@ export default function Home() {
           <a href="#agent-loop" className="hover:text-foreground">
             Agent loop
           </a>
-          <a href="#try-it" className="hover:text-foreground">
-            Try it
-          </a>
+          <TryItLink className="hover:text-foreground">Try it</TryItLink>
         </nav>
-        <a
-          href="#try-it"
-          className="rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90"
-        >
+        <TryItLink className="rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90">
           Try it live
-        </a>
+        </TryItLink>
       </header>
 
       <main className="mx-auto w-full max-w-6xl px-6 sm:px-10">
@@ -43,10 +40,7 @@ export default function Home() {
               out loud, no black box.
             </p>
             <div className="mt-8 flex items-center gap-3">
-              <a
-                href="#try-it"
-                className="flex items-center gap-4 rounded-full bg-surface py-2 pl-6 pr-2 text-left shadow-sm ring-1 ring-border transition-shadow hover:shadow-md"
-              >
+              <TryItLink className="flex items-center gap-4 rounded-full bg-surface py-2 pl-6 pr-2 text-left shadow-sm ring-1 ring-border transition-shadow hover:shadow-md">
                 <span className="text-sm leading-tight">
                   <span className="block font-medium">Watch it</span>
                   <span className="block text-muted">fix a real bug</span>
@@ -68,13 +62,13 @@ export default function Home() {
                     />
                   </svg>
                 </span>
-              </a>
+              </TryItLink>
             </div>
           </div>
 
-          <div id="try-it">
+          <TryItTarget>
             <AgentDemo />
-          </div>
+          </TryItTarget>
         </section>
 
         <section id="how-it-works" className="border-t border-border py-20">
