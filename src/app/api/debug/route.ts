@@ -1,33 +1,7 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 import { Sandbox } from "@vercel/sandbox";
 import { createClient } from "@/lib/supabase/server";
 
-const execFileAsync = promisify(execFile);
-
 const NVIDIA_MODEL = "meta/llama-3.3-70b-instruct";
-
-const BUGGY_SOURCE = `function sum(a, b) {\n  return a - b;\n}\n\nmodule.exports = { sum };\n`;
-
-const TEST_SOURCE = `const test = require("node:test");
-const assert = require("node:assert");
-const { sum } = require("./sum");
-
-test("sum adds two positive numbers", () => {
-  assert.strictEqual(sum(2, 3), 5);
-});
-
-test("sum adds negative numbers", () => {
-  assert.strictEqual(sum(-1, -1), -2);
-});
-
-test("sum with zero returns the other number", () => {
-  assert.strictEqual(sum(0, 7), 7);
-});
-`;
 
 const MAX_LEN = 4000;
 const RATE_LIMIT = 5;
@@ -125,67 +99,9 @@ function reviewPrompt(before: string, patched: string) {
   ];
 }
 
-// Built-in demo bug: runs locally in /tmp. This is our own trusted code, so
-// no sandbox is needed — it's cheap and instant.
-async function runDemoAgent(send: (event: StreamEvent) => void) {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "recur-"));
-  try {
-    const targetFile = path.join(dir, "sum.js");
-    await fs.writeFile(targetFile, BUGGY_SOURCE, "utf8");
-    await fs.writeFile(path.join(dir, "sum.test.js"), TEST_SOURCE, "utf8");
-
-    async function runTests() {
-      try {
-        const { stdout, stderr } = await execFileAsync(
-          "node",
-          ["--test", path.join(dir, "sum.test.js")],
-          { cwd: dir }
-        );
-        return { pass: true, output: stdout + stderr };
-      } catch (err: unknown) {
-        const e = err as { stdout?: string; stderr?: string };
-        return { pass: false, output: (e.stdout ?? "") + (e.stderr ?? "") };
-      }
-    }
-
-    const before = BUGGY_SOURCE;
-    let result = await runTests();
-
-    if (result.pass) {
-      send({ type: "step", label: "Run tests", detail: "already passing", status: "done" });
-      send({ type: "result", before, after: before, pass: true });
-      return;
-    }
-
-    send({ type: "step", label: "Diagnose", detail: "reading failure output", status: "done" });
-    const diagnosis = await callModel(diagnosePrompt(before, TEST_SOURCE, result.output), 150);
-
-    send({ type: "step", label: "Patch", detail: "writing a candidate fix", status: "done" });
-    const patched = extractCode(diagnosis);
-    await fs.writeFile(targetFile, patched, "utf8");
-
-    result = await runTests();
-    send({
-      type: "step",
-      label: "Run tests",
-      detail: result.pass ? "all tests passing" : "still failing",
-      status: result.pass ? "done" : "failed",
-    });
-
-    if (result.pass) {
-      const review = await callModel(reviewPrompt(before, patched), 60);
-      send({ type: "step", label: "Self-review", detail: review.trim(), status: "done" });
-    }
-
-    send({ type: "result", before, after: patched, pass: result.pass });
-  } finally {
-    await fs.rm(dir, { recursive: true, force: true });
-  }
-}
-
 // User-submitted code: runs in an isolated, network-denied Vercel Sandbox.
 // Never executed in our own server process.
-async function runCustomAgent(
+async function runAgent(
   userCode: string,
   userTest: string,
   send: (event: StreamEvent) => void
@@ -264,24 +180,20 @@ export async function POST(req: Request) {
     if (typeof body?.code === "string") userCode = body.code.trim();
     if (typeof body?.test === "string") userTest = body.test.trim();
   } catch {
-    // no body / not JSON — falls through to the demo path
+    // no/invalid body — falls through to the validation error below
   }
 
-  const isCustom = userCode.length > 0 || userTest.length > 0;
-
-  if (isCustom) {
-    if (!userCode || !userTest) {
-      return Response.json(
-        { error: "Both your code and a test for it are required." },
-        { status: 400 }
-      );
-    }
-    if (userCode.length > MAX_LEN || userTest.length > MAX_LEN) {
-      return Response.json(
-        { error: `Keep each file under ${MAX_LEN} characters.` },
-        { status: 400 }
-      );
-    }
+  if (!userCode || !userTest) {
+    return Response.json(
+      { error: "Both your code and a test for it are required." },
+      { status: 400 }
+    );
+  }
+  if (userCode.length > MAX_LEN || userTest.length > MAX_LEN) {
+    return Response.json(
+      { error: `Keep each file under ${MAX_LEN} characters.` },
+      { status: 400 }
+    );
   }
 
   const supabase = await createClient();
@@ -303,17 +215,13 @@ export async function POST(req: Request) {
           if (event.type === "result") finalResult = event;
           send(event);
         };
-        if (isCustom) {
-          await runCustomAgent(userCode, userTest, record);
-        } else {
-          await runDemoAgent(record);
-        }
+        await runAgent(userCode, userTest, record);
 
         if (user && finalResult) {
           await supabase.from("run_history").insert({
             user_id: user.id,
-            source: isCustom ? "custom" : "demo",
-            label: isCustom ? "Your own bug" : "Demo bug (sum.js)",
+            source: "custom",
+            label: "Your own bug",
             pass: (finalResult as ResultEvent).pass,
             steps,
           });

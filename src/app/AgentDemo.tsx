@@ -32,7 +32,6 @@ test("adds two numbers", () => {
 });`;
 
 export default function AgentDemo() {
-  const [mode, setMode] = useState<"demo" | "custom">("demo");
   const [code, setCode] = useState("");
   const [testSource, setTestSource] = useState("");
   const [state, setState] = useState<"idle" | "streaming" | "done" | "error">("idle");
@@ -50,10 +49,7 @@ export default function AgentDemo() {
       const res = await fetch("/api/debug", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body:
-          mode === "custom"
-            ? JSON.stringify({ code, test: testSource })
-            : JSON.stringify({}),
+        body: JSON.stringify({ code, test: testSource }),
       });
       if (!res.ok || !res.body) {
         const payload = await res.json().catch(() => null);
@@ -98,7 +94,7 @@ export default function AgentDemo() {
     setError(null);
   }
 
-  const canSubmitCustom = code.trim().length > 0 && testSource.trim().length > 0;
+  const canSubmit = code.trim().length > 0 && testSource.trim().length > 0;
 
   return (
     <div className="rounded-2xl bg-[#e2ded2] p-3 sm:p-4">
@@ -126,86 +122,44 @@ export default function AgentDemo() {
         </div>
 
         {state === "idle" && (
-          <div className="flex flex-col gap-4 py-5">
-            <div className="flex gap-2 text-xs">
-              <button
-                onClick={() => setMode("demo")}
-                className={
-                  "rounded-full px-3 py-1.5 font-medium " +
-                  (mode === "demo"
-                    ? "bg-foreground text-background"
-                    : "border border-border text-muted hover:text-foreground")
-                }
-              >
-                Demo bug
-              </button>
-              <button
-                onClick={() => setMode("custom")}
-                className={
-                  "rounded-full px-3 py-1.5 font-medium " +
-                  (mode === "custom"
-                    ? "bg-foreground text-background"
-                    : "border border-border text-muted hover:text-foreground")
-                }
-              >
-                Your own bug
-              </button>
+          <div className="flex flex-col gap-3 py-5">
+            <p className="text-sm text-muted">
+              Paste a broken function and a test for it. Your code must
+              export via <code>module.exports</code> and your test must{" "}
+              <code>require(&quot;./code&quot;)</code> — runs isolated, no
+              network access, {MAX_LEN} char limit each.
+            </p>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted">
+                Your code (code.js)
+              </label>
+              <textarea
+                value={code}
+                onChange={(e) => setCode(e.target.value.slice(0, MAX_LEN))}
+                placeholder={CODE_PLACEHOLDER}
+                rows={6}
+                className="w-full rounded-lg border border-border bg-[#faf9f6] p-3 font-mono text-xs text-foreground outline-none focus:border-foreground"
+              />
             </div>
-
-            {mode === "demo" ? (
-              <div className="flex flex-col items-start gap-3">
-                <p className="text-sm text-muted">
-                  seed-repo/sum.js has a planted bug. Run the agent to watch
-                  it diagnose, patch, test, and self-review.
-                </p>
-                <button
-                  onClick={runAgent}
-                  className="rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90"
-                >
-                  Debug it
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                <p className="text-sm text-muted">
-                  Paste a broken function and a test for it. Your code must
-                  export via <code>module.exports</code> and your test must{" "}
-                  <code>require(&quot;./code&quot;)</code> — runs isolated,
-                  no network access, {MAX_LEN} char limit each.
-                </p>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-muted">
-                    Your code (code.js)
-                  </label>
-                  <textarea
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.slice(0, MAX_LEN))}
-                    placeholder={CODE_PLACEHOLDER}
-                    rows={6}
-                    className="w-full rounded-lg border border-border bg-[#faf9f6] p-3 font-mono text-xs text-foreground outline-none focus:border-foreground"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-muted">
-                    Your test (code.test.js)
-                  </label>
-                  <textarea
-                    value={testSource}
-                    onChange={(e) => setTestSource(e.target.value.slice(0, MAX_LEN))}
-                    placeholder={TEST_PLACEHOLDER}
-                    rows={6}
-                    className="w-full rounded-lg border border-border bg-[#faf9f6] p-3 font-mono text-xs text-foreground outline-none focus:border-foreground"
-                  />
-                </div>
-                <button
-                  onClick={runAgent}
-                  disabled={!canSubmitCustom}
-                  className="self-start rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Fix it
-                </button>
-              </div>
-            )}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted">
+                Your test (code.test.js)
+              </label>
+              <textarea
+                value={testSource}
+                onChange={(e) => setTestSource(e.target.value.slice(0, MAX_LEN))}
+                placeholder={TEST_PLACEHOLDER}
+                rows={6}
+                className="w-full rounded-lg border border-border bg-[#faf9f6] p-3 font-mono text-xs text-foreground outline-none focus:border-foreground"
+              />
+            </div>
+            <button
+              onClick={runAgent}
+              disabled={!canSubmit}
+              className="self-start rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Fix it
+            </button>
           </div>
         )}
 

@@ -21,8 +21,8 @@ output.
 
 ## How it works
 
-A seed repo (`seed-repo/sum.js`) ships with one deliberate bug and a failing test
-suite. Clicking **Debug it** triggers the loop:
+Paste a broken JS function and a test for it. Clicking **Fix it** triggers the
+loop:
 
 1. **Diagnose** — the agent reads the failing test output and the source file
 2. **Patch** — it writes a corrected version of the file
@@ -30,6 +30,10 @@ suite. Clicking **Debug it** triggers the loop:
 4. **Self-review** — a second model call checks whether the fix is minimal and safe
 
 Every step is shown in the UI as it happens, not hidden behind a spinner.
+Submitted code never runs in the app's own server process — it executes inside
+an isolated Vercel Sandbox with no outbound network access and a 60s timeout.
+
+Sign in with Google or GitHub to have your runs saved to your account.
 
 ## Tech stack
 

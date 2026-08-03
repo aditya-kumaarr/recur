@@ -55,8 +55,9 @@ export default function Home() {
             How it works
           </h2>
           <p className="mt-3 max-w-xl text-muted">
-            One click runs the whole loop against a repo with a planted bug —
-            each step shown as it actually happens, not after the fact.
+            Paste your own broken function and its test, and watch the loop
+            run against real code — each step shown as it actually happens,
+            not after the fact.
           </p>
 
           <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
