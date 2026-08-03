@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Recur
 
-## Getting Started
+**The agent that debugs itself.**
 
-First, run the development server:
+Point it at a repo with failing tests. It diagnoses the failure, writes a patch,
+runs the tests, and reviews its own fix — live, out loud, no black box.
+
+Built for the ChatGPT Codex India Hackathon 2026 — **Agentic Coding** track.
+
+## Live demo
+
+[Add your deployed Vercel URL here]
+
+## The problem
+
+Debugging AI agents today are black boxes: you get a diff, and you have to trust
+it. Recur makes every step of the loop visible — the hypothesis, the patch, the
+test run, and a self-review that checks the fix is minimal and safe — so a human
+watching can actually follow the agent's reasoning instead of just accepting its
+output.
+
+## How it works
+
+A seed repo (`seed-repo/sum.js`) ships with one deliberate bug and a failing test
+suite. Clicking **Debug it** triggers the loop:
+
+1. **Diagnose** — the agent reads the failing test output and the source file
+2. **Patch** — it writes a corrected version of the file
+3. **Run tests** — the patch is applied and the test suite re-run for real
+4. **Self-review** — a second model call checks whether the fix is minimal and safe
+
+Every step is shown in the UI as it happens, not hidden behind a spinner.
+
+## Tech stack
+
+- **Next.js 16** (App Router) + **Tailwind CSS v4**
+- **Meta Llama 3.3 70B Instruct**, served free via **NVIDIA NIM** (OpenAI-compatible
+  API — `https://integrate.api.nvidia.com/v1`)
+- Test execution via Node's built-in test runner (`node --test`), run directly
+  in the API route
+- Built with **OpenAI Codex** as the primary coding agent
+
+## Running locally
 
 ```bash
+npm install
+cp .env.local.example .env.local   # add your own NVIDIA_API_KEY
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Get a free API key at [build.nvidia.com](https://build.nvidia.com/meta/llama-3_3-70b-instruct).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## A note on latency
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The free NVIDIA NIM endpoint's throughput varies under load — a full run
+(diagnose + patch + self-review, two model calls) typically takes anywhere from
+15 seconds to a couple of minutes. This is a free-tier characteristic of the
+inference provider, not the agent loop itself.
