@@ -1,17 +1,31 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
 const execFileAsync = promisify(execFile);
 
-const REPO_ROOT = process.cwd();
-const TARGET_FILE = path.join(REPO_ROOT, "seed-repo", "sum.js");
-const TEST_FILE = path.join(REPO_ROOT, "seed-repo", "sum.test.js");
+const NVIDIA_MODEL = "meta/llama-3.3-70b-instruct";
 
 const BUGGY_SOURCE = `function sum(a, b) {\n  return a - b;\n}\n\nmodule.exports = { sum };\n`;
 
-const NVIDIA_MODEL = "meta/llama-3.3-70b-instruct";
+const TEST_SOURCE = `const test = require("node:test");
+const assert = require("node:assert");
+const { sum } = require("./sum");
+
+test("sum adds two positive numbers", () => {
+  assert.strictEqual(sum(2, 3), 5);
+});
+
+test("sum adds negative numbers", () => {
+  assert.strictEqual(sum(-1, -1), -2);
+});
+
+test("sum with zero returns the other number", () => {
+  assert.strictEqual(sum(0, 7), 7);
+});
+`;
 
 type Step = {
   label: string;
@@ -19,12 +33,12 @@ type Step = {
   status: "done" | "failed";
 };
 
-async function runTests() {
+async function runTests(dir: string) {
   try {
     const { stdout, stderr } = await execFileAsync(
       "node",
-      ["--test", TEST_FILE],
-      { cwd: REPO_ROOT }
+      ["--test", path.join(dir, "sum.test.js")],
+      { cwd: dir }
     );
     return { pass: true, output: stdout + stderr };
   } catch (err: unknown) {
@@ -70,12 +84,15 @@ function extractCode(raw: string): string {
 export async function POST() {
   const steps: Step[] = [];
 
-  // Reset to the original buggy version so every demo run starts the same way.
-  await fs.writeFile(TARGET_FILE, BUGGY_SOURCE, "utf8");
-  const testFile = await fs.readFile(TEST_FILE, "utf8");
+  // Every run gets its own writable scratch dir in /tmp — required on Vercel,
+  // where the deployed app's own filesystem is read-only.
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "recur-"));
+  const targetFile = path.join(dir, "sum.js");
+  await fs.writeFile(targetFile, BUGGY_SOURCE, "utf8");
+  await fs.writeFile(path.join(dir, "sum.test.js"), TEST_SOURCE, "utf8");
 
-  const before = await fs.readFile(TARGET_FILE, "utf8");
-  let result = await runTests();
+  const before = BUGGY_SOURCE;
+  let result = await runTests(dir);
 
   if (result.pass) {
     steps.push({ label: "Run tests", detail: "already passing", status: "done" });
@@ -93,7 +110,7 @@ export async function POST() {
       },
       {
         role: "user",
-        content: `Source file (seed-repo/sum.js):\n\`\`\`js\n${before}\`\`\`\n\nTest file (seed-repo/sum.test.js):\n\`\`\`js\n${testFile}\`\`\`\n\nTest run output:\n${result.output}\n\nFix the source file so all tests pass. Make the smallest possible change.`,
+        content: `Source file (sum.js):\n\`\`\`js\n${before}\`\`\`\n\nTest file (sum.test.js):\n\`\`\`js\n${TEST_SOURCE}\`\`\`\n\nTest run output:\n${result.output}\n\nFix the source file so all tests pass. Make the smallest possible change.`,
       },
     ],
     150
@@ -102,18 +119,17 @@ export async function POST() {
   steps.push({ label: "Patch", detail: "writing a candidate fix", status: "done" });
 
   const patched = extractCode(diagnosis);
-  await fs.writeFile(TARGET_FILE, patched, "utf8");
+  await fs.writeFile(targetFile, patched, "utf8");
 
-  result = await runTests();
+  result = await runTests(dir);
   steps.push({
     label: "Run tests",
     detail: result.pass ? "all tests passing" : "still failing",
     status: result.pass ? "done" : "failed",
   });
 
-  let review = "";
   if (result.pass) {
-    review = await callModel(
+    const review = await callModel(
       [
         {
           role: "system",
@@ -130,6 +146,7 @@ export async function POST() {
     steps.push({ label: "Self-review", detail: review.trim(), status: "done" });
   }
 
-  const after = await fs.readFile(TARGET_FILE, "utf8");
-  return Response.json({ steps, before, after, pass: result.pass });
+  await fs.rm(dir, { recursive: true, force: true });
+
+  return Response.json({ steps, before, after: patched, pass: result.pass });
 }
