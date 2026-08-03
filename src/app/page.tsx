@@ -76,6 +76,100 @@ export default function Home() {
             <AgentDemo />
           </div>
         </section>
+
+        <section id="how-it-works" className="border-t border-border py-20">
+          <h2 className="text-3xl font-medium tracking-tight sm:text-4xl">
+            How it works
+          </h2>
+          <p className="mt-3 max-w-xl text-muted">
+            One click runs the whole loop against a repo with a planted bug —
+            each step shown as it actually happens, not after the fact.
+          </p>
+
+          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              {
+                n: "01",
+                title: "Diagnose",
+                detail:
+                  "Reads the failing test output and the source file, forms a hypothesis about the bug.",
+              },
+              {
+                n: "02",
+                title: "Patch",
+                detail:
+                  "Writes a corrected version of the file — the smallest change that could fix it.",
+              },
+              {
+                n: "03",
+                title: "Run tests",
+                detail:
+                  "The patch is applied for real and the test suite re-run, not simulated.",
+              },
+              {
+                n: "04",
+                title: "Self-review",
+                detail:
+                  "A second pass checks whether the fix is minimal and safe before it's shown as done.",
+                accent: true,
+              },
+            ].map((step) => (
+              <div
+                key={step.n}
+                className="rounded-2xl border border-border bg-surface p-5"
+              >
+                <span
+                  className={
+                    "flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium " +
+                    (step.accent ? "bg-accent text-foreground" : "bg-foreground text-background")
+                  }
+                >
+                  {step.n}
+                </span>
+                <h3 className="mt-4 text-base font-medium">{step.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  {step.detail}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section id="agent-loop" className="border-t border-border py-20">
+          <h2 className="text-3xl font-medium tracking-tight sm:text-4xl">
+            The agent loop
+          </h2>
+          <p className="mt-3 max-w-xl text-muted">
+            Why this is a loop and not one prompt dressed up as an agent.
+          </p>
+
+          <div className="mt-10 grid gap-5 lg:grid-cols-3">
+            <div className="rounded-2xl bg-[#e2ded2] p-5">
+              <h3 className="text-base font-medium">Transparency by default</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                Trust in agentic tools comes from watching the reasoning, not
+                from a polished final diff. Every step streams to the screen
+                as it happens.
+              </p>
+            </div>
+            <div className="rounded-2xl bg-[#e2ded2] p-5">
+              <h3 className="text-base font-medium">A real self-review pass</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                Once the tests pass, a second model call reviews the diff and
+                says whether the change is actually minimal and safe — it
+                doesn&apos;t just stop at green.
+              </p>
+            </div>
+            <div className="rounded-2xl bg-[#e2ded2] p-5">
+              <h3 className="text-base font-medium">Built on</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                Next.js 16 + Tailwind v4, Meta Llama 3.3 70B Instruct via
+                NVIDIA NIM, and Node&apos;s built-in test runner for real
+                execution.
+              </p>
+            </div>
+          </div>
+        </section>
       </main>
     </div>
   );
