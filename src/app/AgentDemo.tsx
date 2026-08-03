@@ -8,27 +8,54 @@ type Step = {
   status: "done" | "failed";
 };
 
-type DebugResponse = {
-  steps: Step[];
-  before: string;
-  after: string;
-  pass: boolean;
-};
+type StreamEvent =
+  | ({ type: "step" } & Step)
+  | { type: "result"; before: string; after: string; pass: boolean }
+  | { type: "error"; message: string };
+
+type Result = { before: string; after: string; pass: boolean };
 
 export default function AgentDemo() {
-  const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
-  const [result, setResult] = useState<DebugResponse | null>(null);
+  const [state, setState] = useState<"idle" | "streaming" | "done" | "error">("idle");
+  const [steps, setSteps] = useState<Step[]>([]);
+  const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function runAgent() {
-    setState("loading");
+    setState("streaming");
+    setSteps([]);
+    setResult(null);
     setError(null);
+
     try {
       const res = await fetch("/api/debug", { method: "POST" });
-      if (!res.ok) throw new Error(await res.text());
-      const data: DebugResponse = await res.json();
-      setResult(data);
-      setState("done");
+      if (!res.ok || !res.body) throw new Error(await res.text());
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const event: StreamEvent = JSON.parse(line);
+          if (event.type === "step") {
+            setSteps((prev) => [...prev, event]);
+          } else if (event.type === "result") {
+            setResult(event);
+            setState("done");
+          } else if (event.type === "error") {
+            throw new Error(event.message);
+          }
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "something went wrong");
       setState("error");
@@ -52,6 +79,12 @@ export default function AgentDemo() {
               {result.pass ? "tests green" : "tests still red"}
             </span>
           )}
+          {state === "streaming" && (
+            <span className="flex items-center gap-1.5 text-xs text-muted">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+              running
+            </span>
+          )}
         </div>
 
         {state === "idle" && (
@@ -69,22 +102,21 @@ export default function AgentDemo() {
           </div>
         )}
 
-        {state === "loading" && (
-          <div className="flex items-center gap-2 py-6 text-sm text-muted">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
-            thinking, patching, testing…
-          </div>
-        )}
-
         {state === "error" && (
           <div className="py-6 text-sm text-[#a32d2d]">{error}</div>
         )}
 
-        {state === "done" && result && (
+        {(state === "streaming" || state === "done") && (
           <>
+            {steps.length === 0 && (
+              <div className="flex items-center gap-2 py-6 text-sm text-muted">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
+                reading the failure…
+              </div>
+            )}
             <ol className="mt-4 flex flex-col gap-4">
-              {result.steps.map((step) => (
-                <li key={step.label} className="flex items-start gap-3">
+              {steps.map((step, i) => (
+                <li key={i} className="flex items-start gap-3">
                   <span
                     className={
                       "mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full " +
@@ -108,12 +140,20 @@ export default function AgentDemo() {
                 </li>
               ))}
             </ol>
-            <button
-              onClick={runAgent}
-              className="mt-5 rounded-full border border-border px-4 py-2 text-xs font-medium hover:bg-[#f5f3ee]"
-            >
-              Run again
-            </button>
+            {state === "streaming" && steps.length > 0 && (
+              <div className="mt-4 flex items-center gap-2 text-sm text-muted">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
+                next step…
+              </div>
+            )}
+            {state === "done" && (
+              <button
+                onClick={runAgent}
+                className="mt-5 rounded-full border border-border px-4 py-2 text-xs font-medium hover:bg-[#f5f3ee]"
+              >
+                Run again
+              </button>
+            )}
           </>
         )}
       </div>
