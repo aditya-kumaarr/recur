@@ -1,6 +1,7 @@
 import AgentDemo from "./AgentDemo";
 import TryItLink from "./TryItLink";
 import TryItTarget from "./TryItTarget";
+import AuthButton from "./AuthButton";
 
 export default function Home() {
   return (
@@ -21,9 +22,12 @@ export default function Home() {
           </a>
           <TryItLink className="hover:text-foreground">Try it</TryItLink>
         </nav>
-        <TryItLink className="rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90">
-          Try it live
-        </TryItLink>
+        <div className="flex items-center gap-3">
+          <TryItLink className="rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90">
+            Try it live
+          </TryItLink>
+          <AuthButton />
+        </div>
       </header>
 
       <main className="mx-auto w-full max-w-6xl px-6 sm:px-10">

@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Seed repo runs standalone under `node --test`, not compiled/linted app code.
+    "seed-repo/**",
   ]),
 ]);
 

@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Sandbox } from "@vercel/sandbox";
+import { createClient } from "@/lib/supabase/server";
 
 const execFileAsync = promisify(execFile);
 
@@ -283,17 +284,39 @@ export async function POST(req: Request) {
     }
   }
 
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
       const send = (event: StreamEvent) => {
         controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
       };
+      const steps: StepEvent[] = [];
+      let finalResult: ResultEvent | null = null;
       try {
+        const record = (event: StreamEvent) => {
+          if (event.type === "step") steps.push(event);
+          if (event.type === "result") finalResult = event;
+          send(event);
+        };
         if (isCustom) {
-          await runCustomAgent(userCode, userTest, send);
+          await runCustomAgent(userCode, userTest, record);
         } else {
-          await runDemoAgent(send);
+          await runDemoAgent(record);
+        }
+
+        if (user && finalResult) {
+          await supabase.from("run_history").insert({
+            user_id: user.id,
+            source: isCustom ? "custom" : "demo",
+            label: isCustom ? "Your own bug" : "Demo bug (sum.js)",
+            pass: (finalResult as ResultEvent).pass,
+            steps,
+          });
         }
       } catch (err) {
         send({
