@@ -15,7 +15,26 @@ type StreamEvent =
 
 type Result = { before: string; after: string; pass: boolean };
 
+const MAX_LEN = 4000;
+
+const CODE_PLACEHOLDER = `function sum(a, b) {
+  return a - b;
+}
+
+module.exports = { sum };`;
+
+const TEST_PLACEHOLDER = `const test = require("node:test");
+const assert = require("node:assert");
+const { sum } = require("./code");
+
+test("adds two numbers", () => {
+  assert.strictEqual(sum(2, 3), 5);
+});`;
+
 export default function AgentDemo() {
+  const [mode, setMode] = useState<"demo" | "custom">("demo");
+  const [code, setCode] = useState("");
+  const [testSource, setTestSource] = useState("");
   const [state, setState] = useState<"idle" | "streaming" | "done" | "error">("idle");
   const [steps, setSteps] = useState<Step[]>([]);
   const [result, setResult] = useState<Result | null>(null);
@@ -28,8 +47,18 @@ export default function AgentDemo() {
     setError(null);
 
     try {
-      const res = await fetch("/api/debug", { method: "POST" });
-      if (!res.ok || !res.body) throw new Error(await res.text());
+      const res = await fetch("/api/debug", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body:
+          mode === "custom"
+            ? JSON.stringify({ code, test: testSource })
+            : JSON.stringify({}),
+      });
+      if (!res.ok || !res.body) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.error ?? (await res.text()));
+      }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -62,6 +91,15 @@ export default function AgentDemo() {
     }
   }
 
+  function reset() {
+    setState("idle");
+    setSteps([]);
+    setResult(null);
+    setError(null);
+  }
+
+  const canSubmitCustom = code.trim().length > 0 && testSource.trim().length > 0;
+
   return (
     <div className="rounded-2xl bg-[#e2ded2] p-3 sm:p-4">
       <div className="rounded-xl bg-surface p-5 shadow-sm ring-1 ring-border">
@@ -88,22 +126,99 @@ export default function AgentDemo() {
         </div>
 
         {state === "idle" && (
-          <div className="flex flex-col items-start gap-3 py-6">
-            <p className="text-sm text-muted">
-              seed-repo/sum.js has a planted bug. Run the agent to watch it
-              diagnose, patch, test, and self-review.
-            </p>
-            <button
-              onClick={runAgent}
-              className="rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90"
-            >
-              Debug it
-            </button>
+          <div className="flex flex-col gap-4 py-5">
+            <div className="flex gap-2 text-xs">
+              <button
+                onClick={() => setMode("demo")}
+                className={
+                  "rounded-full px-3 py-1.5 font-medium " +
+                  (mode === "demo"
+                    ? "bg-foreground text-background"
+                    : "border border-border text-muted hover:text-foreground")
+                }
+              >
+                Demo bug
+              </button>
+              <button
+                onClick={() => setMode("custom")}
+                className={
+                  "rounded-full px-3 py-1.5 font-medium " +
+                  (mode === "custom"
+                    ? "bg-foreground text-background"
+                    : "border border-border text-muted hover:text-foreground")
+                }
+              >
+                Your own bug
+              </button>
+            </div>
+
+            {mode === "demo" ? (
+              <div className="flex flex-col items-start gap-3">
+                <p className="text-sm text-muted">
+                  seed-repo/sum.js has a planted bug. Run the agent to watch
+                  it diagnose, patch, test, and self-review.
+                </p>
+                <button
+                  onClick={runAgent}
+                  className="rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90"
+                >
+                  Debug it
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm text-muted">
+                  Paste a broken function and a test for it. Your code must
+                  export via <code>module.exports</code> and your test must{" "}
+                  <code>require(&quot;./code&quot;)</code> — runs isolated,
+                  no network access, {MAX_LEN} char limit each.
+                </p>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-muted">
+                    Your code (code.js)
+                  </label>
+                  <textarea
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.slice(0, MAX_LEN))}
+                    placeholder={CODE_PLACEHOLDER}
+                    rows={6}
+                    className="w-full rounded-lg border border-border bg-[#faf9f6] p-3 font-mono text-xs text-foreground outline-none focus:border-foreground"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-muted">
+                    Your test (code.test.js)
+                  </label>
+                  <textarea
+                    value={testSource}
+                    onChange={(e) => setTestSource(e.target.value.slice(0, MAX_LEN))}
+                    placeholder={TEST_PLACEHOLDER}
+                    rows={6}
+                    className="w-full rounded-lg border border-border bg-[#faf9f6] p-3 font-mono text-xs text-foreground outline-none focus:border-foreground"
+                  />
+                </div>
+                <button
+                  onClick={runAgent}
+                  disabled={!canSubmitCustom}
+                  className="self-start rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Fix it
+                </button>
+              </div>
+            )}
           </div>
         )}
 
         {state === "error" && (
-          <div className="py-6 text-sm text-[#a32d2d]">{error}</div>
+          <div className="flex flex-col items-start gap-3 py-6">
+            <p className="text-sm text-[#a32d2d]">{error}</p>
+            <button
+              onClick={reset}
+              className="rounded-full border border-border px-4 py-2 text-xs font-medium hover:bg-[#f5f3ee]"
+            >
+              Back
+            </button>
+          </div>
         )}
 
         {(state === "streaming" || state === "done") && (
@@ -148,7 +263,7 @@ export default function AgentDemo() {
             )}
             {state === "done" && (
               <button
-                onClick={runAgent}
+                onClick={reset}
                 className="mt-5 rounded-full border border-border px-4 py-2 text-xs font-medium hover:bg-[#f5f3ee]"
               >
                 Run again

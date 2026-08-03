@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@vercel/sandbox": "^2.9.2",
     "next": "16.2.12",
     "react": "19.2.4",
     "react-dom": "19.2.4"
