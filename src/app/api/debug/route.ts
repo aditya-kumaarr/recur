@@ -25,6 +25,7 @@ type ResultEvent = {
   type: "result";
   before: string;
   after: string;
+  test: string;
   pass: boolean;
 };
 
@@ -114,6 +115,20 @@ function deriveLabel(code: string): string {
   return match ? match[1] : "Custom fix";
 }
 
+function writeTestPrompt(code: string) {
+  return [
+    {
+      role: "system",
+      content:
+        "You are given a JavaScript function. Infer its intended behavior from its name, parameters, and logic, then write a small node:test file with 2-3 cases (a normal case and an edge case) that check it behaves correctly. The function is exported from ./code via module.exports. Return ONLY the test file inside a single ```js code block. No prose.",
+    },
+    {
+      role: "user",
+      content: `Source file:\n\`\`\`js\n${code}\`\`\``,
+    },
+  ];
+}
+
 function diagnosePrompt(before: string, testSource: string, output: string) {
   return [
     {
@@ -146,12 +161,14 @@ function reviewPrompt(before: string, patched: string) {
 // Never executed in our own server process.
 async function runAgent(
   userCode: string,
-  userTest: string,
   send: (event: StreamEvent) => void
 ) {
   const sandbox = await Sandbox.create({
     runtime: "node24",
-    timeout: 60_000,
+    // Sandbox stays alive for the whole run, including the model calls in
+    // between — those can take minutes under free-tier load, so this needs
+    // real headroom, not just enough for the two ~10s test executions.
+    timeout: 5 * 60_000,
     resources: { vcpus: 1 },
     networkPolicy: "deny-all",
   });
@@ -160,9 +177,6 @@ async function runAgent(
     async function writeCode(content: string) {
       await sandbox.writeFiles([{ path: "code.js", content }]);
     }
-
-    await writeCode(userCode);
-    await sandbox.writeFiles([{ path: "code.test.js", content: userTest }]);
 
     async function runTests() {
       const result = await sandbox.runCommand("node", ["--test", "code.test.js"], {
@@ -173,11 +187,22 @@ async function runAgent(
     }
 
     const before = userCode;
+    await writeCode(before);
+
+    send({ type: "step", label: "Understand", detail: "writing a test to check expected behavior", status: "done" });
+    const testDraft = await callModel(
+      writeTestPrompt(before),
+      250,
+      (chunk) => send({ type: "token", content: chunk })
+    );
+    const userTest = extractCode(testDraft);
+    await sandbox.writeFiles([{ path: "code.test.js", content: userTest }]);
+
     let result = await runTests();
 
     if (result.pass) {
       send({ type: "step", label: "Run tests", detail: "already passing", status: "done" });
-      send({ type: "result", before, after: before, pass: true });
+      send({ type: "result", before, after: before, test: userTest, pass: true });
       return;
     }
 
@@ -209,7 +234,7 @@ async function runAgent(
       send({ type: "step", label: "Self-review", detail: review.trim(), status: "done" });
     }
 
-    send({ type: "result", before, after: patched, pass: result.pass });
+    send({ type: "result", before, after: patched, test: userTest, pass: result.pass });
   } finally {
     await sandbox.stop();
   }
@@ -225,24 +250,22 @@ export async function POST(req: Request) {
   }
 
   let userCode = "";
-  let userTest = "";
   try {
     const body = await req.json();
     if (typeof body?.code === "string") userCode = body.code.trim();
-    if (typeof body?.test === "string") userTest = body.test.trim();
   } catch {
     // no/invalid body — falls through to the validation error below
   }
 
-  if (!userCode || !userTest) {
+  if (!userCode) {
     return Response.json(
-      { error: "Both your code and a test for it are required." },
+      { error: "Paste some code first." },
       { status: 400 }
     );
   }
-  if (userCode.length > MAX_LEN || userTest.length > MAX_LEN) {
+  if (userCode.length > MAX_LEN) {
     return Response.json(
-      { error: `Keep each file under ${MAX_LEN} characters.` },
+      { error: `Keep it under ${MAX_LEN} characters.` },
       { status: 400 }
     );
   }
@@ -266,7 +289,7 @@ export async function POST(req: Request) {
           if (event.type === "result") finalResult = event;
           send(event);
         };
-        await runAgent(userCode, userTest, record);
+        await runAgent(userCode, record);
 
         if (user && finalResult) {
           const result = finalResult as ResultEvent;
@@ -277,7 +300,7 @@ export async function POST(req: Request) {
             pass: result.pass,
             steps,
             code: userCode,
-            test_source: userTest,
+            test_source: result.test,
             fixed_code: result.after,
           });
         }

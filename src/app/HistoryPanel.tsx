@@ -28,7 +28,7 @@ function timeAgo(iso: string): string {
 export default function HistoryPanel({
   onLoad,
 }: {
-  onLoad: (run: { code: string; test: string }) => void;
+  onLoad: (run: { code: string }) => void;
 }) {
   const { user } = useUser();
   const [open, setOpen] = useState(false);
@@ -100,12 +100,19 @@ export default function HistoryPanel({
                     <pre className="max-h-32 overflow-y-auto rounded-lg bg-[#faf9f6] p-2 font-mono text-[11px] text-muted">
                       {run.code}
                     </pre>
+                    {run.test_source && (
+                      <details>
+                        <summary className="cursor-pointer text-xs text-muted">
+                          Test the agent wrote
+                        </summary>
+                        <pre className="mt-1 max-h-32 overflow-y-auto rounded-lg bg-[#faf9f6] p-2 font-mono text-[11px] text-muted">
+                          {run.test_source}
+                        </pre>
+                      </details>
+                    )}
                     <button
                       onClick={() => {
-                        onLoad({
-                          code: run.code ?? "",
-                          test: run.test_source ?? "",
-                        });
+                        onLoad({ code: run.code ?? "" });
                         setOpen(false);
                       }}
                       disabled={!run.code}

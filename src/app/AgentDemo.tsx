@@ -11,11 +11,11 @@ type Step = {
 
 type StreamEvent =
   | ({ type: "step" } & Step)
-  | { type: "result"; before: string; after: string; pass: boolean }
+  | { type: "result"; before: string; after: string; test: string; pass: boolean }
   | { type: "error"; message: string }
   | { type: "token"; content: string };
 
-type Result = { before: string; after: string; pass: boolean };
+type Result = { before: string; after: string; test: string; pass: boolean };
 
 const MAX_LEN = 4000;
 
@@ -25,17 +25,8 @@ const CODE_PLACEHOLDER = `function sum(a, b) {
 
 module.exports = { sum };`;
 
-const TEST_PLACEHOLDER = `const test = require("node:test");
-const assert = require("node:assert");
-const { sum } = require("./code");
-
-test("adds two numbers", () => {
-  assert.strictEqual(sum(2, 3), 5);
-});`;
-
 export default function AgentDemo() {
   const [code, setCode] = useState("");
-  const [testSource, setTestSource] = useState("");
   const [state, setState] = useState<"idle" | "streaming" | "done" | "error">("idle");
   const [steps, setSteps] = useState<Step[]>([]);
   const [result, setResult] = useState<Result | null>(null);
@@ -58,7 +49,7 @@ export default function AgentDemo() {
       const res = await fetch("/api/debug", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, test: testSource }),
+        body: JSON.stringify({ code }),
       });
       if (!res.ok || !res.body) {
         const payload = await res.json().catch(() => null);
@@ -107,13 +98,12 @@ export default function AgentDemo() {
     setLiveText("");
   }
 
-  function loadFromHistory(run: { code: string; test: string }) {
+  function loadFromHistory(run: { code: string }) {
     setCode(run.code);
-    setTestSource(run.test);
     reset();
   }
 
-  const canSubmit = code.trim().length > 0 && testSource.trim().length > 0;
+  const canSubmit = code.trim().length > 0;
 
   return (
     <div className="rounded-2xl bg-[#e2ded2] p-3 sm:p-4">
@@ -146,10 +136,10 @@ export default function AgentDemo() {
         {state === "idle" && (
           <div className="flex flex-col gap-3 py-5">
             <p className="text-sm text-muted">
-              Paste a broken function and a test for it. Your code must
-              export via <code>module.exports</code> and your test must{" "}
-              <code>require(&quot;./code&quot;)</code> — runs isolated, no
-              network access, {MAX_LEN} char limit each.
+              Paste a broken function. Your code must export via{" "}
+              <code>module.exports</code> — the agent writes its own test to
+              check it, fixes it, and verifies the fix for real. Runs
+              isolated, no network access, {MAX_LEN} char limit.
             </p>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted">
@@ -159,19 +149,7 @@ export default function AgentDemo() {
                 value={code}
                 onChange={(e) => setCode(e.target.value.slice(0, MAX_LEN))}
                 placeholder={CODE_PLACEHOLDER}
-                rows={6}
-                className="w-full rounded-lg border border-border bg-[#faf9f6] p-3 font-mono text-xs text-foreground outline-none focus:border-foreground"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted">
-                Your test (code.test.js)
-              </label>
-              <textarea
-                value={testSource}
-                onChange={(e) => setTestSource(e.target.value.slice(0, MAX_LEN))}
-                placeholder={TEST_PLACEHOLDER}
-                rows={6}
+                rows={8}
                 className="w-full rounded-lg border border-border bg-[#faf9f6] p-3 font-mono text-xs text-foreground outline-none focus:border-foreground"
               />
             </div>
@@ -202,7 +180,7 @@ export default function AgentDemo() {
             {steps.length === 0 && (
               <div className="flex items-center gap-2 py-6 text-sm text-muted">
                 <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
-                reading the failure…
+                reading your code…
               </div>
             )}
             <ol className="mt-4 flex flex-col gap-4">

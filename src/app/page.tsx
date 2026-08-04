@@ -39,9 +39,9 @@ export default function Home() {
               <span className="block">itself.</span>
             </h1>
             <p className="mt-6 max-w-md text-lg leading-relaxed text-muted">
-              Point it at a repo with failing tests. It diagnoses the failure,
-              writes a patch, runs the tests, and reviews its own fix — live,
-              out loud, no black box.
+              Paste a broken function. It figures out what it should do,
+              writes a test, diagnoses the failure, patches it, and verifies
+              the fix — live, out loud, no black box.
             </p>
           </div>
 
@@ -55,33 +55,39 @@ export default function Home() {
             How it works
           </h2>
           <p className="mt-3 max-w-xl text-muted">
-            Paste your own broken function and its test, and watch the loop
-            run against real code — each step shown as it actually happens,
-            not after the fact.
+            Paste your own broken function — nothing else — and watch the
+            loop run against real code, each step shown as it actually
+            happens, not after the fact.
           </p>
 
-          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
             {[
               {
                 n: "01",
-                title: "Diagnose",
+                title: "Understand",
                 detail:
-                  "Reads the failing test output and the source file, forms a hypothesis about the bug.",
+                  "Infers what your code should do and writes a test to check it.",
               },
               {
                 n: "02",
+                title: "Diagnose",
+                detail:
+                  "Runs that test, reads the failure, forms a hypothesis about the bug.",
+              },
+              {
+                n: "03",
                 title: "Patch",
                 detail:
                   "Writes a corrected version of the file — the smallest change that could fix it.",
               },
               {
-                n: "03",
+                n: "04",
                 title: "Run tests",
                 detail:
-                  "The patch is applied for real and the test suite re-run, not simulated.",
+                  "The patch is applied for real and the test re-run, not simulated.",
               },
               {
-                n: "04",
+                n: "05",
                 title: "Self-review",
                 detail:
                   "A second pass checks whether the fix is minimal and safe before it's shown as done.",
