@@ -18,7 +18,7 @@ type StepEvent = {
   type: "step";
   label: string;
   detail: string;
-  status: "done" | "failed";
+  status: "active" | "done" | "failed";
 };
 
 type ResultEvent = {
@@ -189,15 +189,17 @@ async function runAgent(
     const before = userCode;
     await writeCode(before);
 
-    send({ type: "step", label: "Understand", detail: "writing a test to check expected behavior", status: "done" });
+    send({ type: "step", label: "Understand", detail: "writing a test to check expected behavior", status: "active" });
     const testDraft = await callModel(
       writeTestPrompt(before),
       250,
       (chunk) => send({ type: "token", content: chunk })
     );
     const userTest = extractCode(testDraft);
+    send({ type: "step", label: "Understand", detail: "wrote a test to check expected behavior", status: "done" });
     await sandbox.writeFiles([{ path: "code.test.js", content: userTest }]);
 
+    send({ type: "step", label: "Run tests", detail: "running your test", status: "active" });
     let result = await runTests();
 
     if (result.pass) {
@@ -205,18 +207,22 @@ async function runAgent(
       send({ type: "result", before, after: before, test: userTest, pass: true });
       return;
     }
+    send({ type: "step", label: "Run tests", detail: "confirmed the failure", status: "done" });
 
-    send({ type: "step", label: "Diagnose", detail: "reading failure output", status: "done" });
+    send({ type: "step", label: "Diagnose", detail: "reading the failure output", status: "active" });
     const diagnosis = await callModel(
       diagnosePrompt(before, userTest, result.output),
       200,
       (chunk) => send({ type: "token", content: chunk })
     );
+    send({ type: "step", label: "Diagnose", detail: "found a likely fix", status: "done" });
 
-    send({ type: "step", label: "Patch", detail: "writing a candidate fix", status: "done" });
     const patched = extractCode(diagnosis);
+    send({ type: "step", label: "Patch", detail: "writing the fix to your file", status: "active" });
     await writeCode(patched);
+    send({ type: "step", label: "Patch", detail: "wrote a candidate fix", status: "done" });
 
+    send({ type: "step", label: "Run tests", detail: "re-running your test", status: "active" });
     result = await runTests();
     send({
       type: "step",
@@ -226,6 +232,7 @@ async function runAgent(
     });
 
     if (result.pass) {
+      send({ type: "step", label: "Self-review", detail: "checking the fix is minimal and safe", status: "active" });
       const review = await callModel(
         reviewPrompt(before, patched),
         60,
@@ -285,7 +292,7 @@ export async function POST(req: Request) {
       let finalResult: ResultEvent | null = null;
       try {
         const record = (event: StreamEvent) => {
-          if (event.type === "step") steps.push(event);
+          if (event.type === "step" && event.status !== "active") steps.push(event);
           if (event.type === "result") finalResult = event;
           send(event);
         };

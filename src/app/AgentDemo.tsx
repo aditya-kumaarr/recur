@@ -6,7 +6,7 @@ import HistoryPanel from "./HistoryPanel";
 type Step = {
   label: string;
   detail: string;
-  status: "done" | "failed";
+  status: "active" | "done" | "failed";
 };
 
 type StreamEvent =
@@ -18,6 +18,12 @@ type StreamEvent =
 type Result = { before: string; after: string; test: string; pass: boolean };
 
 const MAX_LEN = 4000;
+
+const WAITING_MESSAGES = [
+  "waiting on the model…",
+  "still working…",
+  "this can take a couple minutes on the free tier…",
+];
 
 const CODE_PLACEHOLDER = `function sum(a, b) {
   return a - b;
@@ -32,11 +38,32 @@ export default function AgentDemo() {
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [liveText, setLiveText] = useState("");
+  const [elapsed, setElapsed] = useState(0);
+  const [msgIndex, setMsgIndex] = useState(0);
   const liveRef = useRef<HTMLPreElement>(null);
+
+  const lastStep = steps[steps.length - 1];
+  const isWaiting =
+    state === "streaming" && !liveText && (!lastStep || lastStep.status === "active");
 
   useEffect(() => {
     liveRef.current?.scrollTo({ top: liveRef.current.scrollHeight });
   }, [liveText]);
+
+  useEffect(() => {
+    if (state !== "streaming") return;
+    const id = setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => clearInterval(id);
+  }, [state]);
+
+  useEffect(() => {
+    if (!isWaiting) return;
+    const id = setInterval(
+      () => setMsgIndex((i) => (i + 1) % WAITING_MESSAGES.length),
+      4000
+    );
+    return () => clearInterval(id);
+  }, [isWaiting]);
 
   async function runAgent() {
     setState("streaming");
@@ -44,6 +71,7 @@ export default function AgentDemo() {
     setResult(null);
     setError(null);
     setLiveText("");
+    setElapsed(0);
 
     try {
       const res = await fetch("/api/debug", {
@@ -75,7 +103,14 @@ export default function AgentDemo() {
             setLiveText((prev) => prev + event.content);
           } else if (event.type === "step") {
             setLiveText("");
-            setSteps((prev) => [...prev, event]);
+            setElapsed(0);
+            setSteps((prev) => {
+              const last = prev[prev.length - 1];
+              if (last && last.label === event.label && last.status === "active") {
+                return [...prev.slice(0, -1), event];
+              }
+              return [...prev, event];
+            });
           } else if (event.type === "result") {
             setResult(event);
             setState("done");
@@ -96,6 +131,7 @@ export default function AgentDemo() {
     setResult(null);
     setError(null);
     setLiveText("");
+    setElapsed(0);
   }
 
   function loadFromHistory(run: { code: string }) {
@@ -178,53 +214,66 @@ export default function AgentDemo() {
         {(state === "streaming" || state === "done") && (
           <>
             {steps.length === 0 && (
-              <div className="flex items-center gap-2 py-6 text-sm text-muted">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
-                reading your code…
+              <div className="flex flex-col gap-1 py-6">
+                <div className="flex items-center gap-2 text-sm text-muted">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
+                  reading your code…
+                  <span className="text-xs">{elapsed}s</span>
+                </div>
               </div>
             )}
             <ol className="mt-4 flex flex-col gap-4">
-              {steps.map((step, i) => (
-                <li key={i} className="flex items-start gap-3">
-                  <span
-                    className={
-                      "mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full " +
-                      (step.status === "done" ? "bg-foreground" : "bg-[#e24b4a]")
-                    }
-                  >
-                    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" aria-hidden="true">
-                      <path
-                        d="M1 4l2 2 4-4"
-                        stroke="var(--background)"
-                        strokeWidth="1.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </span>
-                  <span>
-                    <span className="block text-sm font-medium">{step.label}</span>
-                    <span className="block text-sm text-muted">{step.detail}</span>
-                  </span>
-                </li>
-              ))}
+              {steps.map((step, i) => {
+                const isActive = step.status === "active";
+                return (
+                  <li key={i} className="flex items-start gap-3">
+                    <span
+                      className={
+                        "mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full " +
+                        (isActive
+                          ? "bg-accent"
+                          : step.status === "done"
+                            ? "bg-foreground"
+                            : "bg-[#e24b4a]")
+                      }
+                    >
+                      {isActive ? (
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground" />
+                      ) : (
+                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" aria-hidden="true">
+                          <path
+                            d="M1 4l2 2 4-4"
+                            stroke="var(--background)"
+                            strokeWidth="1.2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="flex-1">
+                      <span className="block text-sm font-medium">{step.label}</span>
+                      <span className="block text-sm text-muted">
+                        {isActive
+                          ? liveText
+                            ? "writing…"
+                            : WAITING_MESSAGES[msgIndex]
+                          : step.detail}
+                        {isActive && <span className="ml-1.5 text-xs">{elapsed}s</span>}
+                      </span>
+                      {isActive && liveText && (
+                        <pre
+                          ref={liveRef}
+                          className="mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap rounded-lg bg-[#faf9f6] p-3 font-mono text-[11px] text-muted"
+                        >
+                          {liveText}
+                        </pre>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
             </ol>
-            {state === "streaming" && steps.length > 0 && (
-              <div className="mt-4">
-                <div className="mb-2 flex items-center gap-2 text-sm text-muted">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
-                  {liveText ? "writing…" : "next step…"}
-                </div>
-                {liveText && (
-                  <pre
-                    ref={liveRef}
-                    className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-lg bg-[#faf9f6] p-3 font-mono text-[11px] text-muted"
-                  >
-                    {liveText}
-                  </pre>
-                )}
-              </div>
-            )}
             {state === "done" && (
               <button
                 onClick={reset}
