@@ -19,7 +19,7 @@ export default async function AccountPage() {
       .order("created_at", { ascending: false }),
     supabase
       .from("run_history")
-      .select("id, source, label, pass, created_at")
+      .select("id, source, label, pass, created_at, code, fixed_code")
       .order("created_at", { ascending: false })
       .limit(20),
   ]);
@@ -63,19 +63,45 @@ export default async function AccountPage() {
             {runs.map((r) => (
               <li
                 key={r.id}
-                className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 text-sm"
+                className="rounded-lg border border-border bg-surface px-4 py-3 text-sm"
               >
-                <span>{r.label}</span>
-                <span
-                  className={
-                    "rounded-full px-2 py-0.5 text-xs font-medium " +
-                    (r.pass
-                      ? "bg-[#f0f9e2] text-[#3b6d11]"
-                      : "bg-[#fcebeb] text-[#a32d2d]")
-                  }
-                >
-                  {r.pass ? "passed" : "failed"}
-                </span>
+                <details>
+                  <summary className="flex cursor-pointer list-none items-center justify-between">
+                    <span>{r.label}</span>
+                    <span
+                      className={
+                        "rounded-full px-2 py-0.5 text-xs font-medium " +
+                        (r.pass
+                          ? "bg-[#f0f9e2] text-[#3b6d11]"
+                          : "bg-[#fcebeb] text-[#a32d2d]")
+                      }
+                    >
+                      {r.pass ? "passed" : "failed"}
+                    </span>
+                  </summary>
+                  {r.code && (
+                    <div className="mt-3 flex flex-col gap-2">
+                      <div>
+                        <p className="mb-1 text-xs font-medium text-muted">
+                          Submitted
+                        </p>
+                        <pre className="max-h-40 overflow-y-auto rounded-lg bg-[#faf9f6] p-2 font-mono text-[11px] text-muted">
+                          {r.code}
+                        </pre>
+                      </div>
+                      {r.fixed_code && (
+                        <div>
+                          <p className="mb-1 text-xs font-medium text-muted">
+                            {r.pass ? "Fixed to" : "Last attempt"}
+                          </p>
+                          <pre className="max-h-40 overflow-y-auto rounded-lg bg-[#faf9f6] p-2 font-mono text-[11px] text-muted">
+                            {r.fixed_code}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </details>
               </li>
             ))}
           </ul>

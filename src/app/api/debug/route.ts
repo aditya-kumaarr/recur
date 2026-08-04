@@ -71,6 +71,11 @@ function extractCode(raw: string): string {
   return (match ? match[1] : raw).trim() + "\n";
 }
 
+function deriveLabel(code: string): string {
+  const match = code.match(/function\s+(\w+)/);
+  return match ? match[1] : "Custom fix";
+}
+
 function diagnosePrompt(before: string, testSource: string, output: string) {
   return [
     {
@@ -218,12 +223,16 @@ export async function POST(req: Request) {
         await runAgent(userCode, userTest, record);
 
         if (user && finalResult) {
+          const result = finalResult as ResultEvent;
           await supabase.from("run_history").insert({
             user_id: user.id,
             source: "custom",
-            label: "Your own bug",
-            pass: (finalResult as ResultEvent).pass,
+            label: deriveLabel(userCode),
+            pass: result.pass,
             steps,
+            code: userCode,
+            test_source: userTest,
+            fixed_code: result.after,
           });
         }
       } catch (err) {

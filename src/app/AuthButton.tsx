@@ -1,21 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { User } from "@supabase/supabase-js";
+import { useUser } from "@/lib/useUser";
 
 export default function AuthButton() {
-  const [user, setUser] = useState<User | null>(null);
+  const { user } = useUser();
   const [open, setOpen] = useState(false);
   const supabase = createClient();
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-    return () => sub.subscription.unsubscribe();
-  }, [supabase]);
 
   function signInWith(provider: "google" | "github") {
     supabase.auth.signInWithOAuth({

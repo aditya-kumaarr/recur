@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import HistoryPanel from "./HistoryPanel";
 
 type Step = {
   label: string;
@@ -94,6 +95,12 @@ export default function AgentDemo() {
     setError(null);
   }
 
+  function loadFromHistory(run: { code: string; test: string }) {
+    setCode(run.code);
+    setTestSource(run.test);
+    reset();
+  }
+
   const canSubmit = code.trim().length > 0 && testSource.trim().length > 0;
 
   return (
@@ -101,24 +108,27 @@ export default function AgentDemo() {
       <div className="rounded-xl bg-surface p-5 shadow-sm ring-1 ring-border">
         <div className="flex items-center justify-between border-b border-border pb-3">
           <span className="text-sm font-medium">Agent log</span>
-          {state === "done" && result && (
-            <span
-              className={
-                "rounded-full px-3 py-1 text-xs font-medium " +
-                (result.pass
-                  ? "bg-[#f0f9e2] text-[#3b6d11]"
-                  : "bg-[#fcebeb] text-[#a32d2d]")
-              }
-            >
-              {result.pass ? "tests green" : "tests still red"}
-            </span>
-          )}
-          {state === "streaming" && (
-            <span className="flex items-center gap-1.5 text-xs text-muted">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-              running
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {state === "done" && result && (
+              <span
+                className={
+                  "rounded-full px-3 py-1 text-xs font-medium " +
+                  (result.pass
+                    ? "bg-[#f0f9e2] text-[#3b6d11]"
+                    : "bg-[#fcebeb] text-[#a32d2d]")
+                }
+              >
+                {result.pass ? "tests green" : "tests still red"}
+              </span>
+            )}
+            {state === "streaming" && (
+              <span className="flex items-center gap-1.5 text-xs text-muted">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+                running
+              </span>
+            )}
+            <HistoryPanel onLoad={loadFromHistory} />
+          </div>
         </div>
 
         {state === "idle" && (
