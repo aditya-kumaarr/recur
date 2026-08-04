@@ -33,11 +33,17 @@ type ErrorEvent = {
   message: string;
 };
 
-type StreamEvent = StepEvent | ResultEvent | ErrorEvent;
+type TokenEvent = {
+  type: "token";
+  content: string;
+};
+
+type StreamEvent = StepEvent | ResultEvent | ErrorEvent | TokenEvent;
 
 async function callModel(
   messages: { role: string; content: string }[],
-  maxTokens: number
+  maxTokens: number,
+  onToken?: (chunk: string) => void
 ) {
   const apiKey = process.env.LLM_API_KEY;
   const apiUrl = process.env.LLM_API_URL;
@@ -56,14 +62,46 @@ async function callModel(
       messages,
       temperature: 0.2,
       max_tokens: maxTokens,
+      stream: true,
     }),
   });
-  if (!res.ok) {
-    const text = await res.text();
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => "");
     throw new Error(`LLM provider error ${res.status}: ${text}`);
   }
-  const data = await res.json();
-  return data.choices[0].message.content as string;
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let full = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const data = trimmed.slice(5).trim();
+      if (!data || data === "[DONE]") continue;
+      try {
+        const json = JSON.parse(data);
+        const delta = json.choices?.[0]?.delta?.content;
+        if (delta) {
+          full += delta;
+          onToken?.(delta);
+        }
+      } catch {
+        // partial/malformed SSE line — safe to skip, next chunk fills it in
+      }
+    }
+  }
+
+  return full;
 }
 
 function extractCode(raw: string): string {
@@ -144,7 +182,11 @@ async function runAgent(
     }
 
     send({ type: "step", label: "Diagnose", detail: "reading failure output", status: "done" });
-    const diagnosis = await callModel(diagnosePrompt(before, userTest, result.output), 200);
+    const diagnosis = await callModel(
+      diagnosePrompt(before, userTest, result.output),
+      200,
+      (chunk) => send({ type: "token", content: chunk })
+    );
 
     send({ type: "step", label: "Patch", detail: "writing a candidate fix", status: "done" });
     const patched = extractCode(diagnosis);
@@ -159,7 +201,11 @@ async function runAgent(
     });
 
     if (result.pass) {
-      const review = await callModel(reviewPrompt(before, patched), 60);
+      const review = await callModel(
+        reviewPrompt(before, patched),
+        60,
+        (chunk) => send({ type: "token", content: chunk })
+      );
       send({ type: "step", label: "Self-review", detail: review.trim(), status: "done" });
     }
 

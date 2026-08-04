@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import HistoryPanel from "./HistoryPanel";
 
 type Step = {
@@ -12,7 +12,8 @@ type Step = {
 type StreamEvent =
   | ({ type: "step" } & Step)
   | { type: "result"; before: string; after: string; pass: boolean }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "token"; content: string };
 
 type Result = { before: string; after: string; pass: boolean };
 
@@ -39,12 +40,19 @@ export default function AgentDemo() {
   const [steps, setSteps] = useState<Step[]>([]);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [liveText, setLiveText] = useState("");
+  const liveRef = useRef<HTMLPreElement>(null);
+
+  useEffect(() => {
+    liveRef.current?.scrollTo({ top: liveRef.current.scrollHeight });
+  }, [liveText]);
 
   async function runAgent() {
     setState("streaming");
     setSteps([]);
     setResult(null);
     setError(null);
+    setLiveText("");
 
     try {
       const res = await fetch("/api/debug", {
@@ -72,7 +80,10 @@ export default function AgentDemo() {
         for (const line of lines) {
           if (!line.trim()) continue;
           const event: StreamEvent = JSON.parse(line);
-          if (event.type === "step") {
+          if (event.type === "token") {
+            setLiveText((prev) => prev + event.content);
+          } else if (event.type === "step") {
+            setLiveText("");
             setSteps((prev) => [...prev, event]);
           } else if (event.type === "result") {
             setResult(event);
@@ -93,6 +104,7 @@ export default function AgentDemo() {
     setSteps([]);
     setResult(null);
     setError(null);
+    setLiveText("");
   }
 
   function loadFromHistory(run: { code: string; test: string }) {
@@ -220,9 +232,19 @@ export default function AgentDemo() {
               ))}
             </ol>
             {state === "streaming" && steps.length > 0 && (
-              <div className="mt-4 flex items-center gap-2 text-sm text-muted">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
-                next step…
+              <div className="mt-4">
+                <div className="mb-2 flex items-center gap-2 text-sm text-muted">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
+                  {liveText ? "writing…" : "next step…"}
+                </div>
+                {liveText && (
+                  <pre
+                    ref={liveRef}
+                    className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-lg bg-[#faf9f6] p-3 font-mono text-[11px] text-muted"
+                  >
+                    {liveText}
+                  </pre>
+                )}
               </div>
             )}
             {state === "done" && (
