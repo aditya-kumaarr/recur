@@ -31,6 +31,16 @@ const CODE_PLACEHOLDER = `function sum(a, b) {
 
 module.exports = { sum };`;
 
+function ThinkingDots() {
+  return (
+    <span className="inline-flex items-center gap-0.5 align-middle">
+      <span className="recur-dot h-1 w-1 rounded-full bg-accent [animation-delay:0ms]" />
+      <span className="recur-dot h-1 w-1 rounded-full bg-accent [animation-delay:150ms]" />
+      <span className="recur-dot h-1 w-1 rounded-full bg-accent [animation-delay:300ms]" />
+    </span>
+  );
+}
+
 export default function AgentDemo() {
   const [code, setCode] = useState("");
   const [state, setState] = useState<"idle" | "streaming" | "done" | "error">("idle");
@@ -216,7 +226,7 @@ export default function AgentDemo() {
             {steps.length === 0 && (
               <div className="flex flex-col gap-1 py-6">
                 <div className="flex items-center gap-2 text-sm text-muted">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
+                  <ThinkingDots />
                   reading your code…
                   <span className="text-xs">{elapsed}s</span>
                 </div>
@@ -231,14 +241,14 @@ export default function AgentDemo() {
                       className={
                         "mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full " +
                         (isActive
-                          ? "bg-accent"
+                          ? "recur-pulse-loop bg-accent"
                           : step.status === "done"
                             ? "bg-foreground"
                             : "bg-[#e24b4a]")
                       }
                     >
                       {isActive ? (
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-foreground" />
                       ) : (
                         <svg width="8" height="8" viewBox="0 0 8 8" fill="none" aria-hidden="true">
                           <path
@@ -253,13 +263,14 @@ export default function AgentDemo() {
                     </span>
                     <span className="flex-1">
                       <span className="block text-sm font-medium">{step.label}</span>
-                      <span className="block text-sm text-muted">
+                      <span className="flex items-center gap-1.5 text-sm text-muted">
+                        {isActive && <ThinkingDots />}
                         {isActive
                           ? liveText
                             ? "writing…"
                             : WAITING_MESSAGES[msgIndex]
                           : step.detail}
-                        {isActive && <span className="ml-1.5 text-xs">{elapsed}s</span>}
+                        {isActive && <span className="text-xs">{elapsed}s</span>}
                       </span>
                       {isActive && liveText && (
                         <pre

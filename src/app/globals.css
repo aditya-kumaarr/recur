@@ -43,3 +43,22 @@ body {
   animation: recur-pulse 0.7s ease-out 2;
   border-radius: 1rem;
 }
+
+.recur-pulse-loop {
+  animation: recur-pulse 1.4s ease-out infinite;
+}
+
+@keyframes recur-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.recur-dot {
+  animation: recur-bounce 1s infinite ease-in-out;
+}
