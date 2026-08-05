@@ -1,6 +1,10 @@
 import { Sandbox } from "@vercel/sandbox";
 import { createClient } from "@/lib/supabase/server";
 
+// Hobby plan hard-caps at 300s regardless of this value — it's set explicitly
+// so raising it actually does something if this project moves to Pro (800s).
+export const maxDuration = 300;
+
 const MAX_LEN = 4000;
 const RATE_LIMIT = 5;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
@@ -41,6 +45,12 @@ type TokenEvent = {
 
 type StreamEvent = StepEvent | ResultEvent | ErrorEvent | TokenEvent;
 
+// Vercel's Hobby plan hard-kills this whole function at 300s with no chance
+// to send our own error — it just goes silent. Up to 3 of these calls can
+// happen in one run, so each one gets its own budget well under that ceiling,
+// leaving room for sandbox setup/test runs too.
+const MODEL_CALL_TIMEOUT_MS = 70_000;
+
 async function callModel(
   messages: { role: string; content: string }[],
   maxTokens: number,
@@ -52,20 +62,32 @@ async function callModel(
   if (!apiKey || !apiUrl || !model) {
     throw new Error("LLM provider is not configured on the server");
   }
-  const res = await fetch(apiUrl, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: 0.2,
-      max_tokens: maxTokens,
-      stream: true,
-    }),
-  });
+
+  let res: Response;
+  try {
+    res = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: 0.2,
+        max_tokens: maxTokens,
+        stream: true,
+      }),
+      signal: AbortSignal.timeout(MODEL_CALL_TIMEOUT_MS),
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "TimeoutError") {
+      throw new Error(
+        "The model didn't respond in time (the free tier is under heavy load right now) — try again in a moment."
+      );
+    }
+    throw err;
+  }
   if (!res.ok || !res.body) {
     const text = await res.text().catch(() => "");
     throw new Error(`LLM provider error ${res.status}: ${text}`);
@@ -76,30 +98,39 @@ async function callModel(
   let buffer = "";
   let full = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
 
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) continue;
-      const data = trimmed.slice(5).trim();
-      if (!data || data === "[DONE]") continue;
-      try {
-        const json = JSON.parse(data);
-        const delta = json.choices?.[0]?.delta?.content;
-        if (delta) {
-          full += delta;
-          onToken?.(delta);
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const data = trimmed.slice(5).trim();
+        if (!data || data === "[DONE]") continue;
+        try {
+          const json = JSON.parse(data);
+          const delta = json.choices?.[0]?.delta?.content;
+          if (delta) {
+            full += delta;
+            onToken?.(delta);
+          }
+        } catch {
+          // partial/malformed SSE line — safe to skip, next chunk fills it in
         }
-      } catch {
-        // partial/malformed SSE line — safe to skip, next chunk fills it in
       }
     }
+  } catch (err) {
+    if (err instanceof Error && err.name === "TimeoutError") {
+      throw new Error(
+        "The model stalled mid-response (the free tier is under heavy load right now) — try again in a moment."
+      );
+    }
+    throw err;
   }
 
   return full;
